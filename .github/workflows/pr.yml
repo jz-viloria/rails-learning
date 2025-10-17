@@ -84,9 +84,14 @@ jobs:
     - name: Check for large files
       run: |
         echo "🔍 Checking for large files..."
-        if find . -size +1M -not -path "./.git/*" -not -path "./vendor/*"; then
+        # Check for large files, excluding common directories that shouldn't be tracked
+        if find . -size +1M -not -path "./.git/*" -not -path "./vendor/*" -not -path "./node_modules/*" -not -path "./tmp/*" -not -path "./log/*" -not -path "./coverage/*" -not -path "./public/assets/*" -not -path "./.bundle/*"; then
           echo "⚠️ Found large files. Please optimize or use Git LFS."
+          echo "Large files found:"
+          find . -size +1M -not -path "./.git/*" -not -path "./vendor/*" -not -path "./node_modules/*" -not -path "./tmp/*" -not -path "./log/*" -not -path "./coverage/*" -not -path "./public/assets/*" -not -path "./.bundle/*"
           exit 1
+        else
+          echo "✅ No large files found."
         fi
 
   # Job 3: Performance Checks

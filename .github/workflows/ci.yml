@@ -90,7 +90,8 @@ jobs:
         
     - name: Set up test database
       run: |
-        # Create test database using direct PostgreSQL commands
+        # Create test database using direct PostgreSQL commands (drop if exists first)
+        PGPASSWORD=postgres psql -h localhost -U postgres -c "DROP DATABASE IF EXISTS dropshipping_store_test;"
         PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE dropshipping_store_test;"
         
         # Create tables using direct SQL (bypassing Rails CLI)
