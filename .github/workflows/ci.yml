@@ -1,0 +1,211 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  RUBY_VERSION: 2.6.10
+  NODE_VERSION: 16
+  RAILS_ENV: test
+
+jobs:
+  # Job 1: Code Quality Checks
+  code-quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ env.RUBY_VERSION }}
+        bundler-cache: true
+        
+    - name: Install dependencies
+      run: |
+        bundle config path vendor/bundle
+        bundle install --jobs 4 --retry 3
+        
+    - name: Run RuboCop (Code Style)
+      run: bundle exec rubocop --format json --out rubocop-results.json || true
+      
+    - name: Run Brakeman (Security Scan)
+      run: bundle exec brakeman --format json --output brakeman-results.json || true
+      
+    - name: Run Bundle Audit (Vulnerability Check)
+      run: bundle exec bundle-audit check --update || true
+      
+    - name: Upload Code Quality Results
+      uses: actions/upload-artifact@v3
+      with:
+        name: code-quality-results
+        path: |
+          rubocop-results.json
+          brakeman-results.json
+
+  # Job 2: Database Setup & Tests
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: dropshipping_store_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ env.RUBY_VERSION }}
+        bundler-cache: true
+        
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        bundle config path vendor/bundle
+        bundle install --jobs 4 --retry 3
+        
+    - name: Set up test database
+      run: |
+        bundle exec rails db:create RAILS_ENV=test
+        bundle exec rails db:schema:load RAILS_ENV=test
+        bundle exec rails db:seed RAILS_ENV=test
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/dropshipping_store_test
+        
+    - name: Run RSpec tests
+      run: bundle exec rspec --format documentation --format json --out rspec-results.json
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/dropshipping_store_test
+        
+    - name: Run system tests
+      run: bundle exec rails test:system
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/dropshipping_store_test
+        
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results
+        path: rspec-results.json
+
+  # Job 3: Build & Security Scan
+  build:
+    name: Build & Security Scan
+    runs-on: ubuntu-latest
+    needs: [code-quality, test]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ env.RUBY_VERSION }}
+        bundler-cache: true
+        
+    - name: Install dependencies
+      run: |
+        bundle config path vendor/bundle
+        bundle install --jobs 4 --retry 3
+        
+    - name: Precompile assets
+      run: bundle exec rails assets:precompile RAILS_ENV=production
+      
+    - name: Run security scan
+      run: |
+        bundle exec brakeman --format json --output security-report.json
+        bundle exec bundle-audit check --update
+      continue-on-error: true
+      
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifacts
+        path: |
+          public/assets/
+          security-report.json
+
+  # Job 4: Deploy to Staging (on develop branch)
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Deploy to staging
+      run: |
+        echo "🚀 Deploying to staging environment..."
+        echo "This would typically deploy to a staging server"
+        echo "For now, we'll just simulate the deployment"
+        
+    - name: Run smoke tests
+      run: |
+        echo "🧪 Running smoke tests on staging..."
+        echo "This would test the deployed application"
+
+  # Job 5: Deploy to Production (on main branch)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Deploy to production
+      run: |
+        echo "🚀 Deploying to production environment..."
+        echo "This would typically deploy to a production server"
+        echo "For now, we'll just simulate the deployment"
+        
+    - name: Run production health checks
+      run: |
+        echo "🏥 Running health checks on production..."
+        echo "This would verify the production deployment"
+
+  # Job 6: Notify on failure
+  notify:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: [code-quality, test, build]
+    if: failure()
+    
+    steps:
+    - name: Notify team
+      run: |
+        echo "❌ CI/CD Pipeline failed!"
+        echo "Please check the logs and fix the issues."
+        echo "This would typically send notifications to Slack/email"

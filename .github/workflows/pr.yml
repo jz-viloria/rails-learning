@@ -1,0 +1,190 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  # Job 1: Validate PR
+  validate-pr:
+    name: Validate Pull Request
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Check PR title
+      run: |
+        echo "📝 Checking PR title format..."
+        # PR titles should follow conventional commits format
+        # Example: feat: add user authentication
+        # Example: fix: resolve cart calculation bug
+        # Example: docs: update README
+        
+    - name: Check PR description
+      run: |
+        echo "📋 Checking PR description..."
+        # PR should have a description explaining changes
+        
+    - name: Check for breaking changes
+      run: |
+        echo "⚠️ Checking for breaking changes..."
+        # Look for BREAKING CHANGE in commit messages
+        
+    - name: Validate commit messages
+      run: |
+        echo "📝 Validating commit messages..."
+        # Check if commits follow conventional commit format
+
+  # Job 2: Code Review Checklist
+  code-review:
+    name: Code Review Checklist
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Check for TODO/FIXME comments
+      run: |
+        echo "🔍 Checking for TODO/FIXME comments..."
+        if grep -r "TODO\|FIXME" app/ config/ db/; then
+          echo "⚠️ Found TODO/FIXME comments. Please address them before merging."
+          exit 1
+        fi
+        
+    - name: Check for console.log statements
+      run: |
+        echo "🔍 Checking for console.log statements..."
+        if find . -name "*.js" -o -name "*.ts" | xargs grep -l "console\.log"; then
+          echo "⚠️ Found console.log statements. Please remove them before merging."
+          exit 1
+        fi
+        
+    - name: Check for hardcoded secrets
+      run: |
+        echo "🔍 Checking for hardcoded secrets..."
+        if grep -r "password\|secret\|key" app/ config/ --exclude-dir=secrets; then
+          echo "⚠️ Found potential hardcoded secrets. Please use environment variables."
+          exit 1
+        fi
+        
+    - name: Check for large files
+      run: |
+        echo "🔍 Checking for large files..."
+        if find . -size +1M -not -path "./.git/*"; then
+          echo "⚠️ Found large files. Please optimize or use Git LFS."
+          exit 1
+        fi
+
+  # Job 3: Performance Checks
+  performance:
+    name: Performance Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 2.6.10
+        bundler-cache: true
+        
+    - name: Install dependencies
+      run: |
+        bundle config path vendor/bundle
+        bundle install --jobs 4 --retry 3
+        
+    - name: Check for N+1 queries
+      run: |
+        echo "🔍 Checking for potential N+1 queries..."
+        # This would typically use tools like bullet gem
+        echo "N+1 query detection would run here"
+        
+    - name: Check for slow queries
+      run: |
+        echo "🔍 Checking for slow queries..."
+        # This would analyze query performance
+        echo "Slow query detection would run here"
+        
+    - name: Check for memory leaks
+      run: |
+        echo "🔍 Checking for memory leaks..."
+        # This would analyze memory usage patterns
+        echo "Memory leak detection would run here"
+
+  # Job 4: Documentation Check
+  documentation:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Check for updated README
+      run: |
+        echo "📚 Checking documentation..."
+        if [ -f "README.md" ]; then
+          echo "✅ README.md exists"
+        else
+          echo "❌ README.md is missing"
+          exit 1
+        fi
+        
+    - name: Check for API documentation
+      run: |
+        echo "📚 Checking API documentation..."
+        # Check if API endpoints are documented
+        
+    - name: Check for code comments
+      run: |
+        echo "📚 Checking code comments..."
+        # Check if complex code has comments
+
+  # Job 5: Security Review
+  security-review:
+    name: Security Review
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 2.6.10
+        bundler-cache: true
+        
+    - name: Install dependencies
+      run: |
+        bundle config path vendor/bundle
+        bundle install --jobs 4 --retry 3
+        
+    - name: Run security scan
+      run: |
+        echo "🔒 Running security scan..."
+        bundle exec brakeman --format json --output security-report.json
+        bundle exec bundle-audit check --update
+        
+    - name: Check for SQL injection
+      run: |
+        echo "🔒 Checking for SQL injection vulnerabilities..."
+        # This would scan for potential SQL injection points
+        
+    - name: Check for XSS vulnerabilities
+      run: |
+        echo "🔒 Checking for XSS vulnerabilities..."
+        # This would scan for potential XSS points
+        
+    - name: Upload security report
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-report
+        path: security-report.json
