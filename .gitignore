@@ -90,6 +90,9 @@ yarn-debug.log*
 # Ignore test coverage
 /coverage/
 
+# Ignore test results
+rspec-results.json
+
 # Ignore temporary files
 *.tmp
 *.temp

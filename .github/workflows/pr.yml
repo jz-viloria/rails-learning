@@ -84,11 +84,19 @@ jobs:
     - name: Check for large files
       run: |
         echo "🔍 Checking for large files..."
+        echo "Current directory contents:"
+        ls -la
+        echo "Checking for files larger than 1MB..."
+        
         # Check for large files, excluding common directories that shouldn't be tracked
-        if find . -size +1M -not -path "./.git/*" -not -path "./vendor/*" -not -path "./node_modules/*" -not -path "./tmp/*" -not -path "./log/*" -not -path "./coverage/*" -not -path "./public/assets/*" -not -path "./.bundle/*"; then
+        LARGE_FILES=$(find . -size +1M -not -path "./.git/*" -not -path "./vendor/*" -not -path "./node_modules/*" -not -path "./tmp/*" -not -path "./log/*" -not -path "./coverage/*" -not -path "./public/assets/*" -not -path "./.bundle/*" -not -name "rspec-results.json" -not -name "security-report.json" 2>/dev/null || true)
+        
+        if [ -n "$LARGE_FILES" ]; then
           echo "⚠️ Found large files. Please optimize or use Git LFS."
           echo "Large files found:"
-          find . -size +1M -not -path "./.git/*" -not -path "./vendor/*" -not -path "./node_modules/*" -not -path "./tmp/*" -not -path "./log/*" -not -path "./coverage/*" -not -path "./public/assets/*" -not -path "./.bundle/*"
+          echo "$LARGE_FILES"
+          echo "File sizes:"
+          ls -lh $LARGE_FILES
           exit 1
         else
           echo "✅ No large files found."
