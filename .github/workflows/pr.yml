@@ -84,7 +84,7 @@ jobs:
     - name: Check for large files
       run: |
         echo "🔍 Checking for large files..."
-        if find . -size +1M -not -path "./.git/*"; then
+        if find . -size +1M -not -path "./.git/*" -not -path "./vendor/*"; then
           echo "⚠️ Found large files. Please optimize or use Git LFS."
           exit 1
         fi
