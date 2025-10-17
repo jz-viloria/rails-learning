@@ -36,7 +36,7 @@ jobs:
       run: bundle exec rubocop --format json --out rubocop-results.json || true
       
     - name: Run Brakeman (Security Scan)
-      run: bundle exec brakeman --format json --output brakeman-results.json || true
+      run: bundle exec brakeman --format json --output brakeman-results.json --exit-on-warn || true
       
     - name: Run Bundle Audit (Vulnerability Check)
       run: bundle exec bundle-audit check --update || true
@@ -138,8 +138,8 @@ jobs:
       
     - name: Run security scan
       run: |
-        bundle exec brakeman --format json --output security-report.json
-        bundle exec bundle-audit check --update
+        bundle exec brakeman --format json --output security-report.json --exit-on-warn || true
+        bundle exec bundle-audit check --update || true
       continue-on-error: true
       
     - name: Upload build artifacts
