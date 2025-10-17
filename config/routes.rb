@@ -10,6 +10,14 @@ Rails.application.routes.draw do
   # Orders routes - for handling purchases
   resources :orders, only: [:new, :create, :show]
   
+  # Authentication routes
+  get "register", to: "authentication#new"
+  post "register", to: "authentication#create"
+  get "login", to: "authentication#login"
+  post "login", to: "authentication#authenticate"
+  delete "logout", to: "authentication#logout"
+  get "dashboard", to: "authentication#dashboard"
+  
   # About page
   get "about", to: "pages#about"
 end

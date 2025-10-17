@@ -24,6 +24,9 @@ gem "bcrypt", "~> 3.1.7"
 # Logger for Rails 6.0 compatibility
 gem "logger"
 
+# Bootsnap for faster boot times (commented out due to compilation issues with Ruby 2.6.10)
+# gem "bootsnap", ">= 1.4.2", require: false
+
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem "tzinfo-data", platforms: %i[ mswin mswin64 mingw x64_mingw jruby ]
 

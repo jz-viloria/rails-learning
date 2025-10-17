@@ -22,6 +22,23 @@
         <div class="navbar-nav ms-auto">
           <%= link_to "Products", products_path, class: "nav-link" %>
           <%= link_to "About", about_path, class: "nav-link" %>
+          
+          <% if logged_in? %>
+            <div class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                <%= current_user.first_name %>
+              </a>
+              <ul class="dropdown-menu">
+                <li><%= link_to "Dashboard", dashboard_path, class: "dropdown-item" %></li>
+                <li><%= link_to "Profile", "#", class: "dropdown-item" %></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><%= link_to "Sign Out", logout_path, method: :delete, class: "dropdown-item" %></li>
+              </ul>
+            </div>
+          <% else %>
+            <%= link_to "Sign In", login_path, class: "nav-link" %>
+            <%= link_to "Register", register_path, class: "nav-link" %>
+          <% end %>
         </div>
       </div>
     </nav>
