@@ -1,0 +1,22 @@
+current directory: /Users/johnviloria/Documents/CodeRepos/playground/railsLearning/rails-learning/vendor/bundle/ruby/2.6.0/gems/puma-4.3.12/ext/puma_http11
+/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/bin/ruby -I /System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0 -r ./siteconf20251017-86100-1y8liiz.rb extconf.rb
+checking for BIO_read() in -lcrypto... no
+checking for BIO_read() in -llibeay32... no
+creating Makefile
+
+current directory: /Users/johnviloria/Documents/CodeRepos/playground/railsLearning/rails-learning/vendor/bundle/ruby/2.6.0/gems/puma-4.3.12/ext/puma_http11
+make "DESTDIR=" clean
+
+current directory: /Users/johnviloria/Documents/CodeRepos/playground/railsLearning/rails-learning/vendor/bundle/ruby/2.6.0/gems/puma-4.3.12/ext/puma_http11
+make "DESTDIR="
+compiling http11_parser.c
+compiling io_buffer.c
+compiling mini_ssl.c
+compiling puma_http11.c
+linking shared-object puma/puma_http11.bundle
+ld: warning: search path '/AppleInternal/Library/BuildRoots/01adf19d-fba1-11ef-a947-f2a857e00a32/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.4.Internal.sdk/usr/local/libressl-by-deployment-target/14.0/lib' not found
+ld: warning: search path '/AppleInternal/Library/BuildRoots/01adf19d-fba1-11ef-a947-f2a857e00a32/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.4.Internal.sdk/usr/local/lib' not found
+
+current directory: /Users/johnviloria/Documents/CodeRepos/playground/railsLearning/rails-learning/vendor/bundle/ruby/2.6.0/gems/puma-4.3.12/ext/puma_http11
+make "DESTDIR=" install
+/usr/bin/install -c -m 0755 puma_http11.bundle ./.gem.20251017-86100-1hp9016/puma

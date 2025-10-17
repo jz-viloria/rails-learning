@@ -1,0 +1,61 @@
+<div class="row">
+  <div class="col-12">
+    <h1 class="display-4 text-center mb-5">Welcome to Our Dropshipping Store!</h1>
+    
+    <!-- Featured Products Section -->
+    <% if @featured_products.any? %>
+      <div class="mb-5">
+        <h2 class="text-center mb-4">Featured Products</h2>
+        <div class="row">
+          <% @featured_products.each do |product| %>
+            <div class="col-md-4 mb-4">
+              <div class="card h-100">
+                <%= image_tag product.image_url, class: "card-img-top", style: "height: 200px; object-fit: cover;" %>
+                <div class="card-body d-flex flex-column">
+                  <h5 class="card-title"><%= product.name %></h5>
+                  <p class="card-text flex-grow-1"><%= truncate(product.description, length: 100) %></p>
+                  <div class="mt-auto">
+                    <p class="card-text">
+                      <strong class="text-success"><%= product.formatted_price %></strong>
+                      <% if product.low_stock? %>
+                        <span class="badge bg-warning text-dark ms-2">Low Stock</span>
+                      <% end %>
+                    </p>
+                    <%= link_to "View Details", product_path(product), class: "btn btn-primary" %>
+                  </div>
+                </div>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </div>
+    <% end %>
+
+    <!-- All Products Section -->
+    <div class="mb-5">
+      <h2 class="text-center mb-4">All Products</h2>
+      <div class="row">
+        <% @products.each do |product| %>
+          <div class="col-lg-3 col-md-4 col-sm-6 mb-4">
+            <div class="card h-100">
+              <%= image_tag product.image_url, class: "card-img-top", style: "height: 150px; object-fit: cover;" %>
+              <div class="card-body d-flex flex-column">
+                <h6 class="card-title"><%= product.name %></h6>
+                <p class="card-text flex-grow-1 small"><%= truncate(product.description, length: 80) %></p>
+                <div class="mt-auto">
+                  <p class="card-text">
+                    <strong class="text-success"><%= product.formatted_price %></strong>
+                    <% unless product.in_stock? %>
+                      <span class="badge bg-danger ms-2">Out of Stock</span>
+                    <% end %>
+                  </p>
+                  <%= link_to "View", product_path(product), class: "btn btn-outline-primary btn-sm" %>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  </div>
+</div>

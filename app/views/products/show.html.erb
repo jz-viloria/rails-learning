@@ -1,0 +1,66 @@
+<div class="row">
+  <div class="col-md-6">
+    <%= image_tag @product.image_url, class: "img-fluid rounded", alt: @product.name %>
+  </div>
+  
+  <div class="col-md-6">
+    <h1 class="display-5"><%= @product.name %></h1>
+    
+    <div class="mb-3">
+      <span class="h3 text-success"><%= @product.formatted_price %></span>
+      <% if @product.low_stock? %>
+        <span class="badge bg-warning text-dark ms-2">Low Stock</span>
+      <% end %>
+      <% unless @product.in_stock? %>
+        <span class="badge bg-danger ms-2">Out of Stock</span>
+      <% end %>
+    </div>
+    
+    <p class="lead"><%= @product.description %></p>
+    
+    <div class="mb-4">
+      <h5>Stock Status</h5>
+      <p>
+        <% if @product.in_stock? %>
+          <span class="text-success">✓ In Stock</span> (<%= @product.stock_quantity %> available)
+        <% else %>
+          <span class="text-danger">✗ Out of Stock</span>
+        <% end %>
+      </p>
+    </div>
+    
+    <div class="d-grid gap-2 d-md-flex">
+      <% if @product.in_stock? %>
+        <%= link_to "Add to Cart", "#", class: "btn btn-primary btn-lg" %>
+      <% else %>
+        <button class="btn btn-secondary btn-lg" disabled>Out of Stock</button>
+      <% end %>
+      <%= link_to "Back to Products", products_path, class: "btn btn-outline-secondary" %>
+    </div>
+  </div>
+</div>
+
+<!-- Product Details Section -->
+<div class="row mt-5">
+  <div class="col-12">
+    <h3>Product Details</h3>
+    <table class="table table-striped">
+      <tr>
+        <td><strong>Name:</strong></td>
+        <td><%= @product.name %></td>
+      </tr>
+      <tr>
+        <td><strong>Price:</strong></td>
+        <td><%= @product.formatted_price %></td>
+      </tr>
+      <tr>
+        <td><strong>Stock Quantity:</strong></td>
+        <td><%= @product.stock_quantity %></td>
+      </tr>
+      <tr>
+        <td><strong>Featured:</strong></td>
+        <td><%= @product.featured? ? "Yes" : "No" %></td>
+      </tr>
+    </table>
+  </div>
+</div>

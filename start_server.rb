@@ -1,0 +1,613 @@
+#!/usr/bin/env ruby
+
+# Simple script to start a basic web server for our dropshipping store
+require 'webrick'
+require 'json'
+require 'pg'
+require 'cgi'
+
+# Database connection
+def db_connection
+  @db_connection ||= PG.connect(
+    host: 'localhost',
+    dbname: 'dropshipping_store_development',
+    user: 'postgres',
+    password: 'postgres'
+  )
+end
+
+# Get all products
+def get_products
+  result = db_connection.exec("SELECT * FROM products ORDER BY created_at DESC")
+  result.map do |row|
+    {
+      id: row['id'],
+      name: row['name'],
+      description: row['description'],
+      price: row['price'],
+      image_url: row['image_url'],
+      stock_quantity: row['stock_quantity'],
+      featured: row['featured'] == 't',
+      category: row['category'],
+      brand: row['brand'],
+      sku: row['sku']
+    }
+  end
+end
+
+# Get a single product
+def get_product(id)
+  result = db_connection.exec("SELECT * FROM products WHERE id = $1", [id])
+  return nil if result.ntuples == 0
+  
+  row = result[0]
+  {
+    id: row['id'],
+    name: row['name'],
+    description: row['description'],
+    price: row['price'],
+    image_url: row['image_url'],
+    stock_quantity: row['stock_quantity'],
+    featured: row['featured'] == 't',
+    category: row['category'],
+    brand: row['brand'],
+    sku: row['sku']
+  }
+end
+
+# Shopping cart management
+def get_cart_from_cookie(cookie_string)
+  return {} unless cookie_string
+  
+  cart_cookie = cookie_string.split(';').find { |c| c.strip.start_with?('cart=') }
+  return {} unless cart_cookie
+  
+  cart_data = cart_cookie.split('=', 2)[1]
+  return {} unless cart_data
+  
+  begin
+    JSON.parse(CGI.unescape(cart_data))
+  rescue
+    {}
+  end
+end
+
+def cart_to_cookie(cart)
+  "cart=#{CGI.escape(cart.to_json)}; Path=/; Max-Age=86400"
+end
+
+def add_to_cart(cart, product_id, quantity = 1)
+  product_id = product_id.to_s
+  cart[product_id] = (cart[product_id] || 0) + quantity.to_i
+  cart
+end
+
+def remove_from_cart(cart, product_id)
+  cart.delete(product_id.to_s)
+  cart
+end
+
+def update_cart_item(cart, product_id, quantity)
+  product_id = product_id.to_s
+  if quantity.to_i <= 0
+    cart.delete(product_id)
+  else
+    cart[product_id] = quantity.to_i
+  end
+  cart
+end
+
+def get_cart_items(cart)
+  return [] if cart.empty?
+  
+  product_ids = cart.keys.join(',')
+  result = db_connection.exec("SELECT * FROM products WHERE id IN (#{product_ids})")
+  
+  result.map do |row|
+    product = {
+      id: row['id'],
+      name: row['name'],
+      description: row['description'],
+      price: row['price'].to_f,
+      image_url: row['image_url'],
+      stock_quantity: row['stock_quantity'].to_i,
+      featured: row['featured'] == 't',
+      category: row['category'],
+      brand: row['brand'],
+      sku: row['sku']
+    }
+    
+    quantity = cart[row['id']].to_i
+    {
+      product: product,
+      quantity: quantity,
+      total_price: product[:price] * quantity
+    }
+  end
+end
+
+def get_cart_total(cart_items)
+  cart_items.sum { |item| item[:total_price] }
+end
+
+# HTML template for the homepage
+def homepage_html(cart = {})
+  products = get_products
+  featured_products = products.select { |p| p[:featured] }
+  cart_items = get_cart_items(cart)
+  cart_count = cart_items.sum { |item| item[:quantity] }
+  
+  <<~HTML
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Dropshipping Store</title>
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+          <a class="navbar-brand" href="/">Dropshipping Store</a>
+          <div class="navbar-nav ms-auto">
+            <a class="nav-link" href="/products">Products</a>
+            <a class="nav-link" href="/about">About</a>
+            <a class="nav-link position-relative" href="/cart">
+              🛒 Cart
+              #{if cart_count > 0
+                "<span class='position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger'>#{cart_count}</span>"
+              end}
+            </a>
+          </div>
+        </div>
+      </nav>
+
+      <main class="container mt-4">
+        <div class="row">
+          <div class="col-12">
+            <h1 class="display-4 text-center mb-5">Welcome to Our Dropshipping Store!</h1>
+            
+            #{if featured_products.any?
+              <<~FEATURED
+                <div class="mb-5">
+                  <h2 class="text-center mb-4">Featured Products</h2>
+                  <div class="row">
+                    #{featured_products.map do |product|
+                      <<~PRODUCT
+                        <div class="col-md-4 mb-4">
+                          <div class="card h-100">
+                            <img src="#{product[:image_url]}" class="card-img-top" style="height: 200px; object-fit: cover;" alt="#{product[:name]}">
+                            <div class="card-body d-flex flex-column">
+                              <h5 class="card-title">#{product[:name]}</h5>
+                              <p class="card-text flex-grow-1">#{product[:description][0..100]}...</p>
+                              <div class="mt-auto">
+                                <p class="card-text">
+                                  <strong class="text-success">$#{product[:price]}</strong>
+                                  #{'<span class="badge bg-warning text-dark ms-2">Low Stock</span>' if product[:stock_quantity].to_i < 10}
+                                </p>
+                                <a href="/products/#{product[:id]}" class="btn btn-primary">View Details</a>
+                                <a href="/cart/add/#{product[:id]}" class="btn btn-success ms-2">Add to Cart</a>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      PRODUCT
+                    end.join}
+                  </div>
+                </div>
+              FEATURED
+            end}
+
+            <div class="mb-5">
+              <h2 class="text-center mb-4">All Products</h2>
+              <div class="row">
+                #{products.map do |product|
+                  <<~PRODUCT
+                    <div class="col-lg-3 col-md-4 col-sm-6 mb-4">
+                      <div class="card h-100">
+                        <img src="#{product[:image_url]}" class="card-img-top" style="height: 150px; object-fit: cover;" alt="#{product[:name]}">
+                        <div class="card-body d-flex flex-column">
+                          <h6 class="card-title">#{product[:name]}</h6>
+                          <p class="card-text flex-grow-1 small">#{product[:description][0..80]}...</p>
+                          <div class="mt-auto">
+                            <p class="card-text">
+                              <strong class="text-success">$#{product[:price]}</strong>
+                              #{'<span class="badge bg-danger ms-2">Out of Stock</span>' if product[:stock_quantity].to_i == 0}
+                            </p>
+                            <a href="/products/#{product[:id]}" class="btn btn-outline-primary btn-sm">View</a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  PRODUCT
+                end.join}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer class="bg-dark text-light text-center py-3 mt-5">
+        <div class="container">
+          <p>&copy; 2024 Dropshipping Store. Built with Ruby on Rails.</p>
+        </div>
+      </footer>
+
+      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    </body>
+    </html>
+  HTML
+end
+
+# HTML template for product show page
+def product_show_html(product, cart = {})
+  return "Product not found" unless product
+  
+  cart_items = get_cart_items(cart)
+  cart_count = cart_items.sum { |item| item[:quantity] }
+  
+  <<~HTML
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>#{product[:name]} - Dropshipping Store</title>
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+          <a class="navbar-brand" href="/">Dropshipping Store</a>
+          <div class="navbar-nav ms-auto">
+            <a class="nav-link" href="/products">Products</a>
+            <a class="nav-link" href="/about">About</a>
+            <a class="nav-link position-relative" href="/cart">
+              🛒 Cart
+              #{if cart_count > 0
+                "<span class='position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger'>#{cart_count}</span>"
+              end}
+            </a>
+          </div>
+        </div>
+      </nav>
+
+      <main class="container mt-4">
+        <div class="row">
+          <div class="col-md-6">
+            <img src="#{product[:image_url]}" class="img-fluid rounded" alt="#{product[:name]}">
+          </div>
+          
+          <div class="col-md-6">
+            <h1 class="display-5">#{product[:name]}</h1>
+            
+            <div class="mb-3">
+              <span class="h3 text-success">$#{product[:price]}</span>
+              #{'<span class="badge bg-warning text-dark ms-2">Low Stock</span>' if product[:stock_quantity].to_i < 10}
+              #{'<span class="badge bg-danger ms-2">Out of Stock</span>' if product[:stock_quantity].to_i == 0}
+            </div>
+            
+            <p class="lead">#{product[:description]}</p>
+            
+            <div class="mb-4">
+              <h5>Stock Status</h5>
+              <p>
+                #{if product[:stock_quantity].to_i > 0
+                  "<span class='text-success'>✓ In Stock</span> (#{product[:stock_quantity]} available)"
+                else
+                  "<span class='text-danger'>✗ Out of Stock</span>"
+                end}
+              </p>
+            </div>
+            
+            <div class="d-grid gap-2 d-md-flex">
+              #{if product[:stock_quantity].to_i > 0
+                "<a href='/cart/add/#{product[:id]}' class='btn btn-success btn-lg'>Add to Cart</a>"
+              else
+                '<button class="btn btn-secondary btn-lg" disabled>Out of Stock</button>'
+              end}
+              <a href="/" class="btn btn-outline-secondary">Back to Products</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="row mt-5">
+          <div class="col-12">
+            <h3>Product Details</h3>
+            <table class="table table-striped">
+              <tr><td><strong>Name:</strong></td><td>#{product[:name]}</td></tr>
+              <tr><td><strong>Price:</strong></td><td>$#{product[:price]}</td></tr>
+              <tr><td><strong>Stock Quantity:</strong></td><td>#{product[:stock_quantity]}</td></tr>
+              <tr><td><strong>Category:</strong></td><td>#{product[:category]}</td></tr>
+              <tr><td><strong>Brand:</strong></td><td>#{product[:brand]}</td></tr>
+              <tr><td><strong>SKU:</strong></td><td>#{product[:sku]}</td></tr>
+              <tr><td><strong>Featured:</strong></td><td>#{product[:featured] ? 'Yes' : 'No'}</td></tr>
+            </table>
+          </div>
+        </div>
+      </main>
+
+      <footer class="bg-dark text-light text-center py-3 mt-5">
+        <div class="container">
+          <p>&copy; 2024 Dropshipping Store. Built with Ruby on Rails.</p>
+        </div>
+      </footer>
+
+      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    </body>
+    </html>
+  HTML
+end
+
+# Cart page HTML
+def cart_html(cart = {})
+  cart_items = get_cart_items(cart)
+  cart_total = get_cart_total(cart_items)
+  cart_count = cart_items.sum { |item| item[:quantity] }
+  
+  <<~HTML
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Shopping Cart - Dropshipping Store</title>
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+          <a class="navbar-brand" href="/">Dropshipping Store</a>
+          <div class="navbar-nav ms-auto">
+            <a class="nav-link" href="/products">Products</a>
+            <a class="nav-link" href="/about">About</a>
+            <a class="nav-link position-relative" href="/cart">
+              🛒 Cart
+              #{if cart_count > 0
+                "<span class='position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger'>#{cart_count}</span>"
+              end}
+            </a>
+          </div>
+        </div>
+      </nav>
+
+      <main class="container mt-4">
+        <div class="row">
+          <div class="col-12">
+            <h1 class="display-4 text-center mb-5">Shopping Cart</h1>
+            
+            #{if cart_items.empty?
+              <<~EMPTY
+                <div class="text-center">
+                  <h3>Your cart is empty</h3>
+                  <p class="lead">Add some products to get started!</p>
+                  <a href="/" class="btn btn-primary btn-lg">Continue Shopping</a>
+                </div>
+              EMPTY
+            else
+              <<~CART
+                <div class="row">
+                  <div class="col-lg-8">
+                    #{cart_items.map do |item|
+                      <<~ITEM
+                        <div class="card mb-3">
+                          <div class="card-body">
+                            <div class="row">
+                              <div class="col-md-3">
+                                <img src="#{item[:product][:image_url]}" class="img-fluid rounded" alt="#{item[:product][:name]}">
+                              </div>
+                              <div class="col-md-6">
+                                <h5 class="card-title">#{item[:product][:name]}</h5>
+                                <p class="card-text">#{item[:product][:description][0..100]}...</p>
+                                <p class="card-text">
+                                  <small class="text-muted">SKU: #{item[:product][:sku]}</small>
+                                </p>
+                              </div>
+                              <div class="col-md-3 text-end">
+                                <p class="h5">$#{item[:product][:price]}</p>
+                                <div class="input-group mb-2" style="width: 120px; margin-left: auto;">
+                                  <a href="/cart/update/#{item[:product][:id]}/#{item[:quantity] - 1}" class="btn btn-outline-secondary btn-sm">-</a>
+                                  <input type="text" class="form-control text-center" value="#{item[:quantity]}" readonly>
+                                  <a href="/cart/update/#{item[:product][:id]}/#{item[:quantity] + 1}" class="btn btn-outline-secondary btn-sm">+</a>
+                                </div>
+                                <p class="h6 text-success">Total: $#{item[:total_price].round(2)}</p>
+                                <a href="/cart/remove/#{item[:product][:id]}" class="btn btn-outline-danger btn-sm">Remove</a>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ITEM
+                    end.join}
+                  </div>
+                  
+                  <div class="col-lg-4">
+                    <div class="card">
+                      <div class="card-header">
+                        <h5>Order Summary</h5>
+                      </div>
+                      <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                          <span>Subtotal (#{cart_count} items):</span>
+                          <span>$#{cart_total.round(2)}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                          <span>Shipping:</span>
+                          <span>Free</span>
+                        </div>
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                          <strong>Total:</strong>
+                          <strong>$#{cart_total.round(2)}</strong>
+                        </div>
+                        <div class="d-grid gap-2 mt-3">
+                          <button class="btn btn-success btn-lg" disabled>Checkout (Coming Soon)</button>
+                          <a href="/" class="btn btn-outline-primary">Continue Shopping</a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              CART
+            end}
+          </div>
+        </div>
+      </main>
+
+      <footer class="bg-dark text-light text-center py-3 mt-5">
+        <div class="container">
+          <p>&copy; 2024 Dropshipping Store. Built with Ruby on Rails.</p>
+        </div>
+      </footer>
+
+      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    </body>
+    </html>
+  HTML
+end
+
+# About page HTML
+def about_html
+  <<~HTML
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>About - Dropshipping Store</title>
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+          <a class="navbar-brand" href="/">Dropshipping Store</a>
+          <div class="navbar-nav ms-auto">
+            <a class="nav-link" href="/products">Products</a>
+            <a class="nav-link" href="/about">About</a>
+          </div>
+        </div>
+      </nav>
+
+      <main class="container mt-4">
+        <div class="row">
+          <div class="col-lg-8 mx-auto">
+            <h1 class="display-4 text-center mb-5">About Our Store</h1>
+            
+            <div class="card">
+              <div class="card-body">
+                <h2 class="card-title">Welcome to Our Dropshipping Store!</h2>
+                <p class="lead">
+                  We're passionate about bringing you high-quality products at affordable prices. 
+                  Our dropshipping model allows us to offer a wide variety of items without the 
+                  overhead of maintaining inventory.
+                </p>
+                
+                <h3>What is Dropshipping?</h3>
+                <p>
+                  Dropshipping is a retail fulfillment method where we don't keep the products 
+                  we sell in stock. Instead, when a customer places an order, we purchase the 
+                  item from a third party and have it shipped directly to the customer.
+                </p>
+                
+                <h3>Why Choose Us?</h3>
+                <ul class="list-unstyled">
+                  <li class="mb-2">✅ <strong>Quality Products:</strong> We carefully curate our selection</li>
+                  <li class="mb-2">✅ <strong>Fast Shipping:</strong> Direct from suppliers to you</li>
+                  <li class="mb-2">✅ <strong>Great Prices:</strong> No middleman markup</li>
+                  <li class="mb-2">✅ <strong>Customer Service:</strong> We're here to help</li>
+                </ul>
+                
+                <div class="text-center mt-4">
+                  <a href="/" class="btn btn-primary btn-lg">Browse Products</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer class="bg-dark text-light text-center py-3 mt-5">
+        <div class="container">
+          <p>&copy; 2024 Dropshipping Store. Built with Ruby on Rails.</p>
+        </div>
+      </footer>
+
+      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    </body>
+    </html>
+  HTML
+end
+
+# Create the server
+server = WEBrick::HTTPServer.new(Port: 3000)
+
+# Route handlers
+server.mount_proc '/' do |req, res|
+  cart = get_cart_from_cookie(req['Cookie'])
+  res.content_type = 'text/html'
+  res.body = homepage_html(cart)
+end
+
+server.mount_proc '/products' do |req, res|
+  cart = get_cart_from_cookie(req['Cookie'])
+  res.content_type = 'text/html'
+  res.body = homepage_html(cart)
+end
+
+server.mount_proc '/products/' do |req, res|
+  product_id = req.path.split('/').last
+  product = get_product(product_id)
+  cart = get_cart_from_cookie(req['Cookie'])
+  res.content_type = 'text/html'
+  res.body = product_show_html(product, cart)
+end
+
+server.mount_proc '/cart' do |req, res|
+  cart = get_cart_from_cookie(req['Cookie'])
+  res.content_type = 'text/html'
+  res.body = cart_html(cart)
+end
+
+server.mount_proc '/cart/add/' do |req, res|
+  product_id = req.path.split('/').last
+  cart = get_cart_from_cookie(req['Cookie'])
+  cart = add_to_cart(cart, product_id)
+  
+  res['Set-Cookie'] = cart_to_cookie(cart)
+  res.status = 302
+  res['Location'] = '/cart'
+end
+
+server.mount_proc '/cart/update/' do |req, res|
+  parts = req.path.split('/')
+  product_id = parts[3]
+  quantity = parts[4].to_i
+  cart = get_cart_from_cookie(req['Cookie'])
+  cart = update_cart_item(cart, product_id, quantity)
+  
+  res['Set-Cookie'] = cart_to_cookie(cart)
+  res.status = 302
+  res['Location'] = '/cart'
+end
+
+server.mount_proc '/cart/remove/' do |req, res|
+  product_id = req.path.split('/').last
+  cart = get_cart_from_cookie(req['Cookie'])
+  cart = remove_from_cart(cart, product_id)
+  
+  res['Set-Cookie'] = cart_to_cookie(cart)
+  res.status = 302
+  res['Location'] = '/cart'
+end
+
+server.mount_proc '/about' do |req, res|
+  res.content_type = 'text/html'
+  res.body = about_html
+end
+
+# Handle shutdown gracefully
+trap 'INT' do
+  server.shutdown
+end
+
+puts "🚀 Starting Dropshipping Store server on http://localhost:3000"
+puts "📱 Visit http://localhost:3000 to see your store!"
+puts "🛑 Press Ctrl+C to stop the server"
+
+server.start
