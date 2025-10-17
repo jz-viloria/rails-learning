@@ -30,9 +30,53 @@ gem "tzinfo-data", platforms: %i[ mswin mswin64 mingw x64_mingw jruby ]
 group :development, :test do
   # Static analysis for security vulnerabilities
   gem "brakeman", require: false
+  
+  # Code style and formatting
+  gem "rubocop", require: false
+  gem "rubocop-rails", require: false
+  gem "rubocop-performance", require: false
+  
+  # Testing framework
+  gem "rspec-rails"
+  gem "factory_bot_rails"
+  gem "faker"
+  
+  # Test coverage
+  gem "simplecov", require: false
+  
+  # Database testing
+  gem "database_cleaner-active_record"
+  
+  # HTTP testing
+  gem "webmock"
+  gem "vcr"
+  
+  # Performance testing
+  gem "bullet"
+  
+  # Bundle audit for security
+  gem "bundler-audit", require: false
 end
 
 group :development do
   # Use console on exceptions pages
   gem "web-console"
+  
+  # Better error pages
+  gem "better_errors"
+  gem "binding_of_caller"
+  
+  # Performance monitoring
+  gem "rack-mini-profiler"
+end
+
+group :test do
+  # System testing
+  gem "capybara"
+  gem "selenium-webdriver"
+  gem "webdrivers"
+  
+  # Test utilities
+  gem "shoulda-matchers"
+  gem "rails-controller-testing"
 end
