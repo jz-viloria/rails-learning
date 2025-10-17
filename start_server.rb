@@ -130,6 +130,77 @@ def get_cart_total(cart_items)
   cart_items.sum { |item| item[:total_price] }
 end
 
+# User authentication helpers
+def get_user_from_session(cookie_string)
+  return nil unless cookie_string
+  
+  session_cookie = cookie_string.split(';').find { |c| c.strip.start_with?('user_session=') }
+  return nil unless session_cookie
+  
+  session_data = session_cookie.split('=', 2)[1]
+  return nil unless session_data
+  
+  begin
+    JSON.parse(CGI.unescape(session_data))['user_id']
+  rescue
+    nil
+  end
+end
+
+def session_to_cookie(user_id)
+  session_data = { user_id: user_id }
+  "user_session=#{CGI.escape(session_data.to_json)}; Path=/; Max-Age=86400"
+end
+
+def get_user(user_id)
+  result = db_connection.exec("SELECT * FROM users WHERE id = $1", [user_id])
+  return nil if result.ntuples == 0
+  
+  row = result[0]
+  {
+    id: row['id'],
+    first_name: row['first_name'],
+    last_name: row['last_name'],
+    email: row['email'],
+    phone: row['phone'],
+    address_line1: row['address_line1'],
+    address_line2: row['address_line2'],
+    city: row['city'],
+    state: row['state'],
+    zip_code: row['zip_code'],
+    country: row['country'],
+    email_notifications: row['email_notifications'] == 't',
+    sms_notifications: row['sms_notifications'] == 't',
+    active: row['active'] == 't',
+    last_login_at: row['last_login_at'],
+    created_at: row['created_at']
+  }
+end
+
+def get_user_orders(user_id)
+  result = db_connection.exec("SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5", [user_id])
+  
+  result.map do |row|
+    {
+      id: row['id'],
+      customer_name: row['customer_name'],
+      customer_email: row['customer_email'],
+      total_amount: row['total_amount'].to_f,
+      status: row['status'],
+      created_at: row['created_at']
+    }
+  end
+end
+
+def parse_form_data(body)
+  form_data = {}
+  body.split('&').each do |pair|
+    key, value = pair.split('=', 2)
+    form_data[CGI.unescape(key)] = CGI.unescape(value || '')
+  end
+  form_data
+end
+
 # HTML template for the homepage
 def homepage_html(cart = {})
   products = get_products
@@ -463,6 +534,342 @@ def cart_html(cart = {})
   HTML
 end
 
+# Registration page HTML
+def registration_html
+  <<~HTML
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Create Account - Dropshipping Store</title>
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+          <a class="navbar-brand" href="/">Dropshipping Store</a>
+          <div class="navbar-nav ms-auto">
+            <a class="nav-link" href="/products">Products</a>
+            <a class="nav-link" href="/about">About</a>
+            <a class="nav-link" href="/login">Sign In</a>
+          </div>
+        </div>
+      </nav>
+
+      <main class="container mt-4">
+        <div class="row justify-content-center">
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-header">
+                <h2 class="text-center mb-0">Create Account</h2>
+              </div>
+              <div class="card-body">
+                <form action="/register" method="post">
+                  <div class="row">
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label for="first_name" class="form-label">First Name</label>
+                        <input type="text" class="form-control" id="first_name" name="first_name" required>
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="mb-3">
+                        <label for="last_name" class="form-label">Last Name</label>
+                        <input type="text" class="form-control" id="last_name" name="last_name" required>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="mb-3">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" class="form-control" id="email" name="email" required>
+                  </div>
+
+                  <div class="mb-3">
+                    <label for="phone" class="form-label">Phone</label>
+                    <input type="tel" class="form-control" id="phone" name="phone">
+                  </div>
+
+                  <div class="mb-3">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" name="password" required minlength="6">
+                  </div>
+
+                  <div class="d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg">Create Account</button>
+                  </div>
+                </form>
+
+                <hr class="my-4">
+                <div class="text-center">
+                  <p class="mb-0">Already have an account?</p>
+                  <a href="/login" class="btn btn-outline-secondary">Sign In</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer class="bg-dark text-light text-center py-3 mt-5">
+        <div class="container">
+          <p>&copy; 2024 Dropshipping Store. Built with Ruby on Rails.</p>
+        </div>
+      </footer>
+
+      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    </body>
+    </html>
+  HTML
+end
+
+# Login page HTML
+def login_html
+  <<~HTML
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Sign In - Dropshipping Store</title>
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+          <a class="navbar-brand" href="/">Dropshipping Store</a>
+          <div class="navbar-nav ms-auto">
+            <a class="nav-link" href="/products">Products</a>
+            <a class="nav-link" href="/about">About</a>
+            <a class="nav-link" href="/register">Register</a>
+          </div>
+        </div>
+      </nav>
+
+      <main class="container mt-4">
+        <div class="row justify-content-center">
+          <div class="col-md-4">
+            <div class="card">
+              <div class="card-header">
+                <h2 class="text-center mb-0">Sign In</h2>
+              </div>
+              <div class="card-body">
+                <form action="/login" method="post">
+                  <div class="mb-3">
+                    <label for="email" class="form-label">Email</label>
+                    <input type="email" class="form-control" id="email" name="email" required>
+                  </div>
+
+                  <div class="mb-3">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" name="password" required>
+                  </div>
+
+                  <div class="d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg">Sign In</button>
+                  </div>
+                </form>
+
+                <hr class="my-4">
+                <div class="text-center">
+                  <p class="mb-0">Don't have an account?</p>
+                  <a href="/register" class="btn btn-outline-secondary">Create Account</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer class="bg-dark text-light text-center py-3 mt-5">
+        <div class="container">
+          <p>&copy; 2024 Dropshipping Store. Built with Ruby on Rails.</p>
+        </div>
+      </footer>
+
+      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    </body>
+    </html>
+  HTML
+end
+
+# Dashboard page HTML
+def dashboard_html(user)
+  orders = get_user_orders(user[:id])
+  total_spent = orders.sum { |order| order[:total_amount] }
+  
+  <<~HTML
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Dashboard - Dropshipping Store</title>
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body>
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+          <a class="navbar-brand" href="/">Dropshipping Store</a>
+          <div class="navbar-nav ms-auto">
+            <a class="nav-link" href="/products">Products</a>
+            <a class="nav-link" href="/about">About</a>
+            <div class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                #{user[:first_name]}
+              </a>
+              <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="/dashboard">Dashboard</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="/logout">Sign Out</a></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <main class="container mt-4">
+        <div class="row">
+          <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+              <h1>Welcome back, #{user[:first_name]}!</h1>
+              <a href="/logout" class="btn btn-outline-danger">Sign Out</a>
+            </div>
+
+            <!-- User Stats -->
+            <div class="row mb-4">
+              <div class="col-md-3">
+                <div class="card text-center">
+                  <div class="card-body">
+                    <h5 class="card-title text-primary">#{orders.length}</h5>
+                    <p class="card-text">Total Orders</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="card text-center">
+                  <div class="card-body">
+                    <h5 class="card-title text-success">$#{sprintf('%.2f', total_spent)}</h5>
+                    <p class="card-text">Total Spent</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="card text-center">
+                  <div class="card-body">
+                    <h5 class="card-title text-info">
+                      #{user[:last_login_at] ? Time.parse(user[:last_login_at]).strftime('%m/%d/%Y') : 'First time!'}
+                    </h5>
+                    <p class="card-text">Last Login</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="card text-center">
+                  <div class="card-body">
+                    <h5 class="card-title text-warning">
+                      #{Time.parse(user[:created_at]).strftime('%m/%d/%Y')}
+                    </h5>
+                    <p class="card-text">Member Since</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="row">
+              <!-- Recent Orders -->
+              <div class="col-lg-8">
+                <div class="card">
+                  <div class="card-header">
+                    <h5 class="mb-0">Recent Orders</h5>
+                  </div>
+                  <div class="card-body">
+                    #{if orders.any?
+                      <<~ORDERS
+                        <div class="table-responsive">
+                          <table class="table table-hover">
+                            <thead>
+                              <tr>
+                                <th>Order #</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              #{orders.map do |order|
+                                <<~ORDER_ROW
+                                  <tr>
+                                    <td>##{order[:id]}</td>
+                                    <td>#{Time.parse(order[:created_at]).strftime('%m/%d/%Y')}</td>
+                                    <td>
+                                      <span class="badge bg-#{case order[:status]
+                                        when 'pending' then 'warning'
+                                        when 'processing' then 'info'
+                                        when 'shipped' then 'primary'
+                                        when 'delivered' then 'success'
+                                        when 'cancelled' then 'danger'
+                                        else 'secondary'
+                                      end}">
+                                        #{order[:status].titleize}
+                                      </span>
+                                    </td>
+                                    <td>$#{sprintf('%.2f', order[:total_amount])}</td>
+                                  </tr>
+                                ORDER_ROW
+                              end.join}
+                            </tbody>
+                          </table>
+                        </div>
+                      ORDERS
+                    else
+                      <<~NO_ORDERS
+                        <div class="text-center py-4">
+                          <p class="text-muted">No orders yet. Start shopping!</p>
+                          <a href="/" class="btn btn-primary">Browse Products</a>
+                        </div>
+                      NO_ORDERS
+                    end}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Account Information -->
+              <div class="col-lg-4">
+                <div class="card">
+                  <div class="card-header">
+                    <h5 class="mb-0">Account Information</h5>
+                  </div>
+                  <div class="card-body">
+                    <h6>Contact Information</h6>
+                    <p class="mb-2">
+                      <strong>Name:</strong> #{user[:first_name]} #{user[:last_name]}<br>
+                      <strong>Email:</strong> #{user[:email]}<br>
+                      #{user[:phone] ? "<strong>Phone:</strong> #{user[:phone]}<br>" : ''}
+                    </p>
+
+                    <div class="d-grid gap-2 mt-3">
+                      <a href="/" class="btn btn-primary">Browse Products</a>
+                      <a href="/cart" class="btn btn-outline-primary">View Cart</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer class="bg-dark text-light text-center py-3 mt-5">
+        <div class="container">
+          <p>&copy; 2024 Dropshipping Store. Built with Ruby on Rails.</p>
+        </div>
+      </footer>
+
+      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    </body>
+    </html>
+  HTML
+end
+
 # About page HTML
 def about_html
   <<~HTML
@@ -599,6 +1006,91 @@ end
 server.mount_proc '/about' do |req, res|
   res.content_type = 'text/html'
   res.body = about_html
+end
+
+# Authentication routes
+server.mount_proc '/register' do |req, res|
+  res.content_type = 'text/html'
+  res.body = registration_html
+end
+
+server.mount_proc '/login' do |req, res|
+  res.content_type = 'text/html'
+  res.body = login_html
+end
+
+server.mount_proc '/dashboard' do |req, res|
+  user_id = get_user_from_session(req['Cookie'])
+  if user_id
+    user = get_user(user_id)
+    res.content_type = 'text/html'
+    res.body = dashboard_html(user)
+  else
+    res.status = 302
+    res['Location'] = '/login'
+  end
+end
+
+# POST handlers for authentication
+server.mount_proc '/register' do |req, res|
+  if req.request_method == 'POST'
+    # Parse form data
+    form_data = parse_form_data(req.body.read)
+    
+    # Create user (simplified - no password hashing for demo)
+    begin
+      result = db_connection.exec(
+        "INSERT INTO users (first_name, last_name, email, phone, password_digest, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) RETURNING id",
+        [form_data['first_name'], form_data['last_name'], form_data['email'], form_data['phone'], form_data['password']]
+      )
+      
+      user_id = result[0]['id']
+      res['Set-Cookie'] = session_to_cookie(user_id)
+      res.status = 302
+      res['Location'] = '/dashboard'
+    rescue PG::UniqueViolation
+      res.content_type = 'text/html'
+      res.body = registration_html + "<script>alert('Email already exists!');</script>"
+    end
+  else
+    res.content_type = 'text/html'
+    res.body = registration_html
+  end
+end
+
+server.mount_proc '/login' do |req, res|
+  if req.request_method == 'POST'
+    # Parse form data
+    form_data = parse_form_data(req.body.read)
+    
+    # Find user and check password (simplified - no hashing for demo)
+    result = db_connection.exec(
+      "SELECT id FROM users WHERE email = $1 AND password_digest = $2",
+      [form_data['email'], form_data['password']]
+    )
+    
+    if result.ntuples > 0
+      user_id = result[0]['id']
+      # Update last login
+      db_connection.exec("UPDATE users SET last_login_at = NOW() WHERE id = $1", [user_id])
+      
+      res['Set-Cookie'] = session_to_cookie(user_id)
+      res.status = 302
+      res['Location'] = '/dashboard'
+    else
+      res.content_type = 'text/html'
+      res.body = login_html + "<script>alert('Invalid email or password!');</script>"
+    end
+  else
+    res.content_type = 'text/html'
+    res.body = login_html
+  end
+end
+
+server.mount_proc '/logout' do |req, res|
+  res['Set-Cookie'] = 'user_session=; Path=/; Max-Age=0'
+  res.status = 302
+  res['Location'] = '/'
 end
 
 # Handle shutdown gracefully

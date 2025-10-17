@@ -1,5 +1,6 @@
 class Order < ApplicationRecord
   # Associations - this defines relationships between models
+  belongs_to :user, optional: true  # Optional for guest orders
   has_many :order_items, dependent: :destroy
   has_many :products, through: :order_items
   
