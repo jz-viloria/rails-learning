@@ -37,6 +37,11 @@ services:
     environment:
       - RAILS_ENV=production
       - DATABASE_URL=postgres://postgres:password@db:5432/dropshipping_store_production
+      - DATABASE_HOST=db
+      - DATABASE_NAME=dropshipping_store_production
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=password
+      - DATABASE_PORT=5432
       - REDIS_URL=redis://redis:6379/0
       - RAILS_SERVE_STATIC_FILES=true
       - RAILS_LOG_TO_STDOUT=true
@@ -49,8 +54,7 @@ services:
       - ./tmp:/app/tmp
     command: >
       sh -c "
-        bundle exec rails db:create db:migrate db:seed &&
-        bundle exec rails server -b 0.0.0.0 -p 3000
+        bundle exec ruby start_server.rb
       "
 
 volumes:

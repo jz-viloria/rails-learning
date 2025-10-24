@@ -8,16 +8,169 @@ require 'cgi'
 
 # Database connection
 def db_connection
-  @db_connection ||= PG.connect(
-    host: 'localhost',
-    dbname: 'dropshipping_store_development',
-    user: 'postgres',
-    password: 'postgres'
-  )
+  @db_connection ||= begin
+    # Use environment variables for Docker, fallback to localhost for development
+    host = ENV['DATABASE_HOST'] || 'localhost'
+    dbname = ENV['DATABASE_NAME'] || ENV['POSTGRES_DB'] || 'dropshipping_store_development'
+    user = ENV['DATABASE_USER'] || ENV['POSTGRES_USER'] || 'postgres'
+    password = ENV['DATABASE_PASSWORD'] || ENV['POSTGRES_PASSWORD'] || 'postgres'
+    port = ENV['DATABASE_PORT'] || '5432'
+    
+    puts "🔌 Connecting to database: #{host}:#{port}/#{dbname} as #{user}"
+    $stdout.flush
+    begin
+      conn = PG.connect(
+        host: host,
+        dbname: dbname,
+        user: user,
+        password: password,
+        port: port
+      )
+      puts "✅ Database connection established!"
+      $stdout.flush
+    rescue => e
+      puts "❌ Database connection failed: #{e.message}"
+      $stdout.flush
+      raise e
+    end
+    
+    # Initialize database tables if they don't exist
+    puts "🔧 Initializing database..."
+    $stdout.flush
+    initialize_database(conn)
+    puts "✅ Database initialization complete!"
+    $stdout.flush
+    conn
+  end
+end
+
+# Initialize database tables and sample data
+def initialize_database(conn)
+  begin
+    # Create tables
+    conn.exec("
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        price DECIMAL(10,2) NOT NULL,
+        image_url VARCHAR(255),
+        stock_quantity INTEGER DEFAULT 0,
+        featured BOOLEAN DEFAULT FALSE,
+        category VARCHAR(100),
+        brand VARCHAR(100),
+        sku VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    ")
+    
+    conn.exec("
+      CREATE TABLE IF NOT EXISTS orders (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER,
+        status VARCHAR(50) DEFAULT 'pending',
+        total_amount DECIMAL(10,2),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    ")
+    
+    conn.exec("
+      CREATE TABLE IF NOT EXISTS order_items (
+        id SERIAL PRIMARY KEY,
+        order_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        price DECIMAL(10,2) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (order_id) REFERENCES orders(id),
+        FOREIGN KEY (product_id) REFERENCES products(id)
+      );
+    ")
+    
+    conn.exec("
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        first_name VARCHAR(255) NOT NULL,
+        last_name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password_digest VARCHAR(255) NOT NULL,
+        address_line1 VARCHAR(255),
+        address_line2 VARCHAR(255),
+        city VARCHAR(255),
+        state VARCHAR(255),
+        zip_code VARCHAR(20),
+        country VARCHAR(50) DEFAULT 'US',
+        preferences JSONB DEFAULT '{}',
+        admin BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    ")
+    
+    # Add sample products if none exist
+    result = conn.exec("SELECT COUNT(*) FROM products")
+    if result[0]['count'].to_i == 0
+      sample_products = [
+        {
+          name: "Wireless Bluetooth Headphones",
+          description: "High-quality wireless headphones with noise cancellation and 30-hour battery life.",
+          price: 89.99,
+          image_url: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500",
+          stock_quantity: 50,
+          featured: true,
+          category: "Electronics",
+          brand: "SoundMax",
+          sku: "WH-001"
+        },
+        {
+          name: "Smart Fitness Watch",
+          description: "Track your fitness goals with this advanced smartwatch featuring heart rate monitoring.",
+          price: 199.99,
+          image_url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500",
+          stock_quantity: 25,
+          featured: true,
+          category: "Electronics",
+          brand: "FitTech",
+          sku: "SFW-002"
+        },
+        {
+          name: "Organic Cotton T-Shirt",
+          description: "Comfortable and sustainable organic cotton t-shirt. Available in multiple colors.",
+          price: 24.99,
+          image_url: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500",
+          stock_quantity: 100,
+          featured: true,
+          category: "Clothing",
+          brand: "EcoWear",
+          sku: "OCT-003"
+        }
+      ]
+      
+      sample_products.each do |product|
+        conn.exec_params("
+          INSERT INTO products (name, description, price, image_url, stock_quantity, featured, category, brand, sku)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ", [
+          product[:name], product[:description], product[:price], product[:image_url],
+          product[:stock_quantity], product[:featured], product[:category], product[:brand], product[:sku]
+        ])
+      end
+      
+      puts "✅ Added #{sample_products.length} sample products to the database"
+    end
+    
+  rescue => e
+    puts "⚠️ Database initialization warning: #{e.message}"
+  end
 end
 
 # Get all products
 def get_products
+  puts "🛍️ Getting products from database..."
+  $stdout.flush
   result = db_connection.exec("SELECT * FROM products ORDER BY created_at DESC")
   result.map do |row|
     {

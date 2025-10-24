@@ -1,10 +1,11 @@
-# Use Ruby 3.0 as base image (more compatible than 2.6.10)
-FROM ruby:3.0-slim
+# Use Ruby 2.6.10 as base image to match our application
+FROM ruby:2.6.10-slim
 
 # Install system dependencies
 RUN apt-get update -qq && apt-get install -y \
     build-essential \
     libpq-dev \
+    postgresql-client \
     curl \
     git \
     && rm -rf /var/lib/apt/lists/*
@@ -14,6 +15,9 @@ WORKDIR /app
 
 # Copy Gemfile and Gemfile.lock
 COPY Gemfile Gemfile.lock ./
+
+# Install the correct bundler version first
+RUN gem install bundler:1.17.2
 
 # Install gems
 RUN bundle config set --local deployment 'true' && \
@@ -35,8 +39,8 @@ ENV RAILS_ENV=production
 ENV RAILS_SERVE_STATIC_FILES=true
 ENV RAILS_LOG_TO_STDOUT=true
 
-# Precompile assets
-RUN bundle exec rails assets:precompile
+# Skip asset precompilation due to Logger compatibility issues
+# RUN bundle exec rails assets:precompile
 
-# Start the server
-CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]
+# Start the server using our custom script
+CMD ["bundle", "exec", "ruby", "start_server.rb"]
