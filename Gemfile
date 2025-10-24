@@ -31,7 +31,6 @@ gem "logger"
 gem "tzinfo-data", platforms: %i[ mswin mswin64 mingw x64_mingw jruby ]
 
 group :production do
-  gem 'puma', '~> 5.0'
   gem 'redis', '~> 4.0'
 end
 
