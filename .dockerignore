@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+CI_CD_GUIDE.md
+STORE_GUIDE.md
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+log/*
+tmp/*
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+spec/
+.rspec
+coverage/
+
+# Development gems
+vendor/bundle/
+
+# Node modules (if any)
+node_modules/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Database files
+*.sqlite3
+*.sqlite3-journal
+
+# Cache
+.cache/

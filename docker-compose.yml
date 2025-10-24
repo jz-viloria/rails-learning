@@ -1,0 +1,57 @@
+# Docker Compose file for Rails app
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: dropshipping_store_production
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (for caching and sessions)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Rails Application
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - RAILS_ENV=production
+      - DATABASE_URL=postgres://postgres:password@db:5432/dropshipping_store_production
+      - REDIS_URL=redis://redis:6379/0
+      - RAILS_SERVE_STATIC_FILES=true
+      - RAILS_LOG_TO_STDOUT=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./tmp:/app/tmp
+    command: >
+      sh -c "
+        bundle exec rails db:create db:migrate db:seed &&
+        bundle exec rails server -b 0.0.0.0 -p 3000
+      "
+
+volumes:
+  postgres_data:
