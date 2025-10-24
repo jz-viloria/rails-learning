@@ -3,13 +3,13 @@ Rails.application.routes.draw do
 
   # Defines the root path route ("/")
   root "products#index"
-  
+
   # Products routes - this is where we'll list and show products
   resources :products, only: [:index, :show]
-  
+
   # Orders routes - for handling purchases
   resources :orders, only: [:new, :create, :show]
-  
+
   # Authentication routes
   get "register", to: "authentication#new"
   post "register", to: "authentication#create"
@@ -17,7 +17,12 @@ Rails.application.routes.draw do
   post "login", to: "authentication#authenticate"
   delete "logout", to: "authentication#logout"
   get "dashboard", to: "authentication#dashboard"
-  
+
+  # Admin routes
+  namespace :admin do
+    resources :products
+  end
+
   # About page
   get "about", to: "pages#about"
 end

@@ -106,6 +106,23 @@ products_data.each do |product_data|
   puts "✅ Created product: #{product.name}"
 end
 
+# Create admin user
+admin_user = User.find_or_create_by(email: "admin@example.com") do |user|
+  user.first_name = "Admin"
+  user.last_name = "User"
+  user.password = "password123"
+  user.password_confirmation = "password123"
+  user.admin = true
+end
+
+if admin_user.persisted?
+  puts "✅ Created admin user: #{admin_user.email}"
+else
+  puts "❌ Failed to create admin user: #{admin_user.errors.full_messages.join(', ')}"
+end
+
 puts "🎉 Seeding complete!"
 puts "📊 Created #{Product.count} products"
+puts "👤 Created #{User.count} users"
 puts "🏠 Visit http://localhost:3000 to see your store!"
+puts "🔧 Admin login: admin@example.com / password123"
